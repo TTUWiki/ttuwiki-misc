@@ -56,9 +56,9 @@ processSubjects() {
     sleep 2
 }
 
-mkdir -p "$OUT_DIR" "$HTML_DIR" "$DUMMIES_DIR"
+mkdir -p -- "$OUT_DIR" "$HTML_DIR" "$DUMMIES_DIR"
 shopt -s nullglob
-rm "$OUT_DIR/"* "$HTML_DIR/"* "$DUMMIES_DIR/"* # clear old files
+rm -- "$OUT_DIR/"* "$HTML_DIR/"* "$DUMMIES_DIR/"* # clear old files
 
 curl -s --cookie "$COOKIES_TEMP" -A "$USER_AGENT" "$OIS_ALL_OPPEKAVAD" | \
     grep -Po "p_fk_str_yksus_id.value='\K[^']+" | processGroupOppekavad # main loop
@@ -71,7 +71,7 @@ done
 for curFile in "$OUT_DIR/"*.*; do
     if [[ -f $curFile ]]; then
         fileMainPart=${curFile%.*}
-        cat "$fileMainPart."* > "$fileMainPart"
-        rm "$fileMainPart."*
+        cat -- "$fileMainPart."* > "$fileMainPart"
+        rm -- "$fileMainPart."*
     fi
 done

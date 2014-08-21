@@ -3,9 +3,9 @@ FILE_TIMETABLES='Расписания'
 FILE_TIMETABLES_PNG='Расписания в PNG'
 
 process() {
-    rm -f "$FILE_TIMETABLES" "$FILE_TIMETABLES_PNG"
+    rm -f -- "$FILE_TIMETABLES" "$FILE_TIMETABLES_PNG"
     curDate=$(date +%Y%m%d)
-    mkdir -p "$curDate"
+    mkdir -p -- "$curDate"
 
     read -r _ # skip 'koondtunniplaan'
 
