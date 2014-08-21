@@ -1,0 +1,77 @@
+#!/bin/bash
+OIS_ALL_OPPEKAVAD='http://ois.ttu.ee/portal/page?_pageid=35,428589&_dad=portal&_schema=PORTAL&from_menu=1'
+OIS_GROUP_OPPEKAVAD='http://ois.ttu.ee/portal/page?_pageid=35,428589&_dad=portal&_schema=PORTAL&p_action=view&p_fk_str_yksus_id=%s&p_kava_versioon_id=&p_net=intranet&p_lang=ET&p_rezhiim=0&p_mode=1&p_from='
+OIS_OPPEKAVA='http://ois.ttu.ee/portal/page?_pageid=35,428589&_dad=portal&_schema=PORTAL&p_action=view&p_fk_str_yksus_id=%s&p_kava_versioon_id=%s&p_net=intranet&p_lang=ET&p_rezhiim=0&p_mode=1&p_from='
+OIS_OPPEAINE='http://ois.ttu.ee/portal/page?_pageid=35,428610&_dad=portal&_schema=PORTAL&p_action=view&p_id=%s&p_public=1&p_mode=1'
+
+OUT_DIR='data/'
+DUMMIES_DIR='dummies/' # for empty pages
+HTML_DIR='html/' # for debugging
+
+getPage() {
+    # use "cliget" firefox extension to get this line:
+    curl --header 'Host: ois.ttu.ee' --header 'REPLACE ME' --header 'REPLACE ME' --header 'REPLACE ME' --header 'REPLACE ME' --header 'REPLACE ME' -J \#
+        -s "$@" | tee "$HTML_DIR/$(date -Ins)"
+}
+
+processGroupOppekavad() {
+    while read -r curGroupId; do
+        oppekavaGroupLink=$(printf "$OIS_GROUP_OPPEKAVAD" "$curGroupId")
+        getPage -o temp "$oppekavaGroupLink"
+
+        oppekavaGroupName=$(grep -Po 'ppekavad - \K[^<]+' temp)
+        oppekavaGroupName=${oppekavaGroupName^}
+        echo "[[$oppekavaGroupName]]\\\\" >> "$OUT_DIR/Õppekavad"
+
+        grep -Po "p_kava_versioon_id.value='\K[^']+" temp | tac | processOppekava "$curGroupId"
+    done
+}
+
+processOppekava() {
+    while read -r curOppekavaId; do
+        oppekavaLink=$(printf "$OIS_OPPEKAVA" "$curGroupId" "$curOppekavaId")
+        getPage "$oppekavaLink" | grep -Po 'portlet_title">\K[^<]+|return false;"><nobr>\K[^<]+|p_aine_id\.value='\''\K[^'\'']+|colspan="(74|69)" >\K[^<]+' | processSubjects "$oppekavaLink"
+    done
+}
+
+processSubjects() {
+    read -r _ # skip 'Query in english'
+    read -r oppekavaCode _ oppekavaName
+    oppekavaFile=${oppekavaCode%%/*}
+    echo "$oppekavaFile..."
+
+    oppekavaType=${oppekavaCode:3:1} # B, M or D
+    [[ $oppekavaType == 'M' ]] && oppekavaType='C' # for correct alphabetical sorting
+    echo "[[$oppekavaFile]] $oppekavaName\\\\" >> "$OUT_DIR/$oppekavaGroupName.$oppekavaType"
+    echo "=== $oppekavaCode - $oppekavaName [$1]" >> "$OUT_DIR/$oppekavaFile"
+
+
+    while read -r subjectLinkId; do
+        [[ $subjectLinkId == 'aine nimetus' ]] && continue
+        read -r subjectCode
+        read -r subjectName
+        echo "[[$subjectCode]] $subjectName\\\\"
+        printf "==%s [$OIS_OPPEAINE]\nЭта страница пуста, здесь не хватает твоих полезных советов." "$subjectName" "$subjectLinkId" > "$DUMMIES_DIR/$subjectCode"
+    done | sort -k 2 -u >> "$OUT_DIR/$oppekavaFile"
+    sleep 2
+}
+
+mkdir -p "$OUT_DIR" "$HTML_DIR" "$DUMMIES_DIR"
+shopt -s nullglob
+rm "$OUT_DIR/"* "$HTML_DIR/"* "$DUMMIES_DIR/"* # clear old files
+
+curl -s --cookie "$COOKIES_TEMP" -A "$USER_AGENT" "$OIS_ALL_OPPEKAVAD" | \
+    grep -Po "p_fk_str_yksus_id.value='\K[^']+" | processGroupOppekavad # main loop
+
+for curFile in "$OUT_DIR/"*.*; do
+    sort -k 2 -u "$curFile" -o "$curFile"
+    echo '\\' >> "$curFile"
+done
+
+for curFile in "$OUT_DIR/"*.*; do
+    if [[ -f $curFile ]]; then
+        fileMainPart=${curFile%.*}
+        cat "$fileMainPart."* > "$fileMainPart"
+        rm "$fileMainPart."*
+    fi
+done

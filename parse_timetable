@@ -1,0 +1,42 @@
+#!/bin/bash
+FILE_TIMETABLES='Расписания'
+FILE_TIMETABLES_PNG='Расписания в PNG'
+
+process() {
+    rm -f "$FILE_TIMETABLES" "$FILE_TIMETABLES_PNG"
+    curDate=$(date +%Y%m%d)
+    mkdir -p "$curDate"
+
+    read -r _ # skip 'koondtunniplaan'
+
+    while read -r line; do
+        if [[ $line == http* ]]; then
+            link=$line
+            link=${link//&amp;/&}
+
+            timetableId=${link##*&g=} # last parameter
+        elif [[ ${line:1:1} == '-' ]]; then # teaduskond
+            echo -e "\n=== $line" >> "$FILE_TIMETABLES"
+            echo -e "\n=== $line" >> "$FILE_TIMETABLES_PNG"
+        else # timetable kood
+            kood=$line
+            echo "$kood..."
+            echo -n "[T:$timetableId $kood] " >> "$FILE_TIMETABLES"
+            link=http${link#https} # use http
+            ./webkit2png -T "$link" > out.png # https://github.com/adamn/python-webkit2png
+            echo -n "[F:$curDate$kood.png $kood] " >> "$FILE_TIMETABLES_PNG"
+
+            #TODO optimize imagemagick calls
+            convert out.png -crop 500x50+0+0 -trim -extent 0x40 +repage PNG24:top.png
+
+            convert out.png -crop 0x0+0+175 +repage bottom.png
+            convert bottom.png -crop 0x0+0-30 -trim +repage bottom.png
+
+            convert -alpha set top.png bottom.png -append -background white -alpha remove "$curDate/$curDate$kood.png" # TODO -alpha off ?
+
+            sleep 1
+        fi
+    done
+}
+
+grep -Po '<td class="common" rowspan="2">(<span[^>]+>)?\K[^<]+|px" onclick="window\.location='"'\K[^']+"'|textDecoration='"''"';">\K[^<]+' PTL_VIEW_PLAAN.html | process
