@@ -10,8 +10,8 @@ HTML_DIR='html/' # for debugging
 
 getPage() {
     # use "cliget" firefox extension to get this line:
-    curl --header 'Host: ois.ttu.ee' --header 'REPLACE ME' --header 'REPLACE ME' --header 'REPLACE ME' --header 'REPLACE ME' --header 'REPLACE ME' -J \#
-        -s "$@" | tee "$HTML_DIR/$(date -Ins)"
+    curl --header .................... -J -L \
+        -s "$@" | tee -- "$HTML_DIR/$(date -Ins)"
 }
 
 processGroupOppekavad() {
@@ -58,7 +58,7 @@ processSubjects() {
 
 mkdir -p -- "$OUT_DIR" "$HTML_DIR" "$DUMMIES_DIR"
 shopt -s nullglob
-rm -- "$OUT_DIR/"* "$HTML_DIR/"* "$DUMMIES_DIR/"* # clear old files
+rm -f -- "$OUT_DIR/"* "$HTML_DIR/"* "$DUMMIES_DIR/"* # clear old files
 
 curl -s --cookie "$COOKIES_TEMP" -A "$USER_AGENT" "$OIS_ALL_OPPEKAVAD" | \
     grep -Po "p_fk_str_yksus_id.value='\K[^']+" | processGroupOppekavad # main loop

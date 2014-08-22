@@ -2,6 +2,8 @@
 FILE_TIMETABLES='Расписания'
 FILE_TIMETABLES_PNG='Расписания в PNG'
 
+set -e # exit immediately on error
+
 process() {
     rm -f -- "$FILE_TIMETABLES" "$FILE_TIMETABLES_PNG"
     curDate=$(date +%Y%m%d)
@@ -15,21 +17,28 @@ process() {
             link=${link//&amp;/&}
 
             timetableId=${link##*&g=} # last parameter
+            #echo "timetableId: $timetableId"
         elif [[ ${line:1:1} == '-' ]]; then # teaduskond
             echo -e "\n=== $line" >> "$FILE_TIMETABLES"
             echo -e "\n=== $line" >> "$FILE_TIMETABLES_PNG"
+            echo "$line..."
         else # timetable kood
             kood=$line
             echo "$kood..."
+            [[ $kood =~ ^[A-Z][A-Z][A-Z][A-Z][0-9][0-9]$ ]] || exit 1
             echo -n "[T:$timetableId $kood] " >> "$FILE_TIMETABLES"
-            link=http${link#https} # use http
-            ./webkit2png -T "$link" > out.png # https://github.com/adamn/python-webkit2png
             echo -n "[F:$curDate$kood.png $kood] " >> "$FILE_TIMETABLES_PNG"
+
+            link=http${link#https} # use http
+            echo "link: $link"
+            set +e
+            wkhtmltoimage -q --disable-smart-width --width 1000 --user-style-sheet stylesheet.css "$link" out.png
+            set -e
 
             #TODO optimize imagemagick calls
             convert out.png -crop 500x50+0+0 -trim -extent 0x40 +repage PNG24:top.png
 
-            convert out.png -crop 0x0+0+175 +repage bottom.png
+            convert out.png -crop 0x0+0+200 +repage bottom.png
             convert bottom.png -crop 0x0+0-30 -trim +repage bottom.png
 
             convert -alpha set top.png bottom.png -append -background white -alpha remove "$curDate/$curDate$kood.png" # TODO -alpha off ?
@@ -39,4 +48,7 @@ process() {
     done
 }
 
-grep -Po '<td class="common" rowspan="2">(<span[^>]+>)?\K[^<]+|px" onclick="window\.location='"'\K[^']+"'|textDecoration='"''"';">\K[^<]+' PTL_VIEW_PLAAN.html | process
+curl 'http://ois.ttu.ee/portal/page?_pageid=35,435155&_dad=portal&_schema=PORTAL&from_menu=1' -o PTL_VIEW_PLAAN.html
+
+# teaduskond | link | name
+grep -Po '<td class="s" rowspan="2">(<span[^>]+>)?\K[^<]+|^\s+onclick="window\.location='"'\K[^']+"'|textDecoration='"''"';">\K[^<]+' PTL_VIEW_PLAAN.html | process
