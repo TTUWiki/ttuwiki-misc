@@ -1,0 +1,19 @@
+#!/bin/bash
+set -e # exit immediately on error
+
+for curFile in data/*; do
+    echo "Editing $curFile..."
+    cp -f -- "$curFile" 'newPage'
+    if wget -O curPage -- "http://ttuwiki.org/cgi-bin/wiki.pl/${curFile##*/}?raw=1"; then
+	echo >> newPage # just in case
+	grep --after-context=999999 -e '----' curPage >> newPage || :
+    fi
+    if [[ ! $(diff curPage newPage) ]]; then
+	echo 'This file is already up-to-date'
+	continue
+    fi
+    ./wikiput -m -u 'Bot' -s 'Автоматическое обновление' -- "http://ttuwiki.org/${curFile##*/}" < newPage
+    rm -f curPage newPage
+done
+
+echo 'Done!'

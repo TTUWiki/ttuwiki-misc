@@ -1,0 +1,13 @@
+#!/bin/bash
+set -e # exit immediately on error
+
+for curFile in dummies/*; do
+    echo "Editing $curFile..."
+    if ! wget -O /dev/null -- "http://ttuwiki.org/cgi-bin/wiki.pl/${curFile##*/}?raw=1"; then
+	./wikiput -m -u 'Bot' -s 'Автоматическое обновление (новые предметы)' -- "http://ttuwiki.org/${curFile##*/}" < "$curFile"
+    fi
+done
+
+rm -f curPage newPage
+
+echo 'Done!'
