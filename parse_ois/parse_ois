@@ -2,7 +2,7 @@
 OIS_ALL_OPPEKAVAD='http://ois.ttu.ee/portal/page?_pageid=35,428589&_dad=portal&_schema=PORTAL&from_menu=1'
 OIS_GROUP_OPPEKAVAD='http://ois.ttu.ee/portal/page?_pageid=35,428589&_dad=portal&_schema=PORTAL&p_action=view&p_fk_str_yksus_id=%s&p_kava_versioon_id=&p_net=intranet&p_lang=ET&p_rezhiim=0&p_mode=1&p_from='
 OIS_OPPEKAVA='http://ois.ttu.ee/portal/page?_pageid=35,428589&_dad=portal&_schema=PORTAL&p_action=view&p_fk_str_yksus_id=%s&p_kava_versioon_id=%s&p_net=intranet&p_lang=ET&p_rezhiim=0&p_mode=1&p_from='
-OIS_OPPEAINE='http://ois.ttu.ee/portal/page?_pageid=35,428610&_dad=portal&_schema=PORTAL&p_action=view&p_id=%s&p_public=1&p_mode=1'
+#OIS_OPPEAINE='http://ois.ttu.ee/portal/page?_pageid=35,428610&_dad=portal&_schema=PORTAL&p_action=view&p_id=%s&p_public=1&p_mode=1'
 
 OUT_DIR='data/'
 DUMMIES_DIR='dummies/' # for empty pages
@@ -21,10 +21,11 @@ processGroupOppekavad() {
 
         oppekavaGroupName=$(grep -Po 'ppekavad - \K[^<]+' temp)
         oppekavaGroupName=${oppekavaGroupName^}
-        echo "[[$oppekavaGroupName]]\\\\" >> "$OUT_DIR/Õppekavad"
+        echo "* [[$oppekavaGroupName]]" >> "$OUT_DIR/Õppekavad"
 
         grep -Po "p_kava_versioon_id.value='\K[^']+" temp | tac | processOppekava "$curGroupId"
     done
+    rm -f temp
 }
 
 processOppekava() {
@@ -36,24 +37,32 @@ processOppekava() {
 
 processSubjects() {
     read -r _ # skip 'Query in english'
-    read -r oppekavaCode _ oppekavaName
-    oppekavaFile=${oppekavaCode%%/*}
-    echo "$oppekavaFile..."
-
+    read -r oppekavaCode dash oppekavaName
+    if [[ $dash != '-' ]]; then # there is a typo in 'VDFR14 /14'
+        oppekavaCode+=$dash
+        oppekavaName=${a##- }
+    fi
+    oppekavaFile=${oppekavaCode/\//-}
+    oppekavaBaseFile=${oppekavaCode%%/*}
+    echo "$oppekavaCode..."
     oppekavaType=${oppekavaCode:3:1} # B, M or D
     [[ $oppekavaType == 'M' ]] && oppekavaType='C' # for correct alphabetical sorting
-    echo "[[$oppekavaFile]] $oppekavaName\\\\" >> "$OUT_DIR/$oppekavaGroupName.$oppekavaType"
-    echo "=== $oppekavaCode - $oppekavaName [$1]" >> "$OUT_DIR/$oppekavaFile"
-
+    echo "[[$oppekavaBaseFile]] $oppekavaName" >> "$OUT_DIR/$oppekavaGroupName.$oppekavaType"
+    if [[ -f "$OUT_DIR/$oppekavaFile" ]]; then
+        echo 'This code was already listed in another teaduskond...'
+        return # skip it
+    fi
+    echo -e "<include \"$oppekavaFile\">\n" >> "$OUT_DIR/$oppekavaBaseFile"
+    echo "== $oppekavaCode - $oppekavaName [$1]" >> "$OUT_DIR/$oppekavaFile"
 
     while read -r subjectLinkId; do
         [[ $subjectLinkId == 'aine nimetus' ]] && continue
         read -r subjectCode
         read -r subjectName
-        echo "[[$subjectCode]] $subjectName\\\\"
-        printf "==%s [$OIS_OPPEAINE]\nЭта страница пуста, здесь не хватает твоих полезных советов." "$subjectName" "$subjectLinkId" > "$DUMMIES_DIR/$subjectCode"
+        echo "[[$subjectCode]] $subjectName"
+        printf '#SUBTITLE %s\n#SUBURL: Course:%s\nЭта страница пуста, здесь не хватает твоих полезных советов.' "$subjectName" "$subjectLinkId" > "$DUMMIES_DIR/$subjectCode"
     done | sort -k 2 -u >> "$OUT_DIR/$oppekavaFile"
-    sleep 2
+    sleep 1
 }
 
 mkdir -p -- "$OUT_DIR" "$HTML_DIR" "$DUMMIES_DIR"
@@ -65,7 +74,7 @@ curl -s --cookie "$COOKIES_TEMP" -A "$USER_AGENT" "$OIS_ALL_OPPEKAVAD" | \
 
 for curFile in "$OUT_DIR/"*.*; do
     sort -k 2 -u "$curFile" -o "$curFile"
-    echo '\\' >> "$curFile"
+    echo >> "$curFile"
 done
 
 for curFile in "$OUT_DIR/"*.*; do
