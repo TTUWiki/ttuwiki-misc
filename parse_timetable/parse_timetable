@@ -1,16 +1,19 @@
 #!/bin/bash
-FILE_TIMETABLES='Расписания'
-FILE_TIMETABLES_PNG='Расписания в PNG'
+FILE_TIMETABLES='pages/Расписания'
+FILE_TIMETABLES_PNG='pages/Расписания в PNG'
 
+shopt -s nullglob
 set -e # exit immediately on error
 
 process() {
-    rm -f -- "$FILE_TIMETABLES" "$FILE_TIMETABLES_PNG"
-    curDate=$(date +%Y%m%d)
-    mkdir -p -- "$curDate"
+    echo '**Расписания в картинках здесь: [[Расписания в PNG]]**' > "$FILE_TIMETABLES"
+    echo '**Обычные расписания здесь: [[Расписания]]**' > "$FILE_TIMETABLES_PNG"
 
+    echo -ne "\nПоследний раз обновлено: **$(date '+%Y-%m-%d')**##" >> "$FILE_TIMETABLES"
+    echo -ne "\nПоследний раз обновлено: **$(date '+%Y-%m-%d')**##" >> "$FILE_TIMETABLES_PNG"
+
+    curDate=$(date '+_%Y%m%d')
     read -r _ # skip 'koondtunniplaan'
-
     while read -r line; do
         if [[ $line == http* ]]; then
             link=$line
@@ -19,20 +22,21 @@ process() {
             timetableId=${link##*&g=} # last parameter
             #echo "timetableId: $timetableId"
         elif [[ ${line:1:1} == '-' ]]; then # teaduskond
-            echo -e "\n=== $line" >> "$FILE_TIMETABLES"
-            echo -e "\n=== $line" >> "$FILE_TIMETABLES_PNG"
+            echo -ne "##\n== $line\n##" >> "$FILE_TIMETABLES"
+            echo -ne "##\n== $line\n##" >> "$FILE_TIMETABLES_PNG"
             echo "$line..."
         else # timetable kood
             kood=$line
             echo "$kood..."
             [[ $kood =~ ^[A-Z][A-Z][A-Z][A-Z][0-9][0-9]$ ]] || exit 1
-            echo -n "[T:$timetableId $kood] " >> "$FILE_TIMETABLES"
-            echo -n "[F:$curDate$kood.png $kood] " >> "$FILE_TIMETABLES_PNG"
+            echo -n "[Ti:$timetableId $kood] " >> "$FILE_TIMETABLES"
+            echo -n "[Fi:$kood$curDate.png $kood] " >> "$FILE_TIMETABLES_PNG"
 
+	    #continue # do not generate images
             link=http${link#https} # use http
             echo "link: $link"
             set +e
-            wkhtmltoimage -q --disable-smart-width --width 1000 --user-style-sheet stylesheet.css "$link" out.png
+            wkhtmltoimage -q --disable-smart-width --width 1000 --user-style-sheet combined.css "$link" out.png
             set -e
 
             #TODO optimize imagemagick calls
@@ -41,14 +45,39 @@ process() {
             convert out.png -crop 0x0+0+200 +repage bottom.png
             convert bottom.png -crop 0x0+0-30 -trim +repage bottom.png
 
-            convert -alpha set top.png bottom.png -append -background white -alpha remove "$curDate/$curDate$kood.png" # TODO -alpha off ?
+            convert -alpha set top.png bottom.png -append -background white -alpha remove "pics/$kood$curDate.png" # TODO -alpha off ?
 
+	    rm -f out.png top.png bottom.png
             sleep 1
         fi
     done
+
+    echo '##' >> "$FILE_TIMETABLES"
+    echo '##' >> "$FILE_TIMETABLES_PNG"
 }
 
-curl 'http://ois.ttu.ee/portal/page?_pageid=35,435155&_dad=portal&_schema=PORTAL&from_menu=1' -o PTL_VIEW_PLAAN.html
+rm -f pics/* pages/*
+mkdir -p 'pages' 'pics'
 
-# teaduskond | link | name
-grep -Po '<td class="s" rowspan="2">(<span[^>]+>)?\K[^<]+|^\s+onclick="window\.location='"'\K[^']+"'|textDecoration='"''"';">\K[^<]+' PTL_VIEW_PLAAN.html | process
+link_css1='http://ois.ttu.ee/pls/portal/PORTAL.wwv_setting.render_css?p_lang_type=NOBIDI&p_subscriberid=1&p_styleid=1&p_siteid=0&p_rctx=P'
+link_css2='http://ois.ttu.ee/pls/portal/ois2.sys_styles.style_sisu'
+(curl "$link_css1"; curl "$link_css2" ) > combined.css
+
+regex_teaduskond='<td class="s" rowspan="2">(<span[^>]+>)?\K[^<]+'
+regex_link='^\s+onclick="window\.location='"'\K[^']+"
+regex_name='textDecoration='"''"';">\K[^<]+'
+link_timetables='http://ois.ttu.ee/portal/page?_pageid=35,435155&_dad=portal&_schema=PORTAL&from_menu=1'
+
+curl "$link_timetables" > out.html
+IFS='.' read -r day month year <<< "$(grep -Po 'publitseeritud:&nbsp;\K[0-9.]+' out.html)"
+wiki_date=$(curl "http://ttuwiki.org/cgi-bin/wiki.pl/Расписания?raw=1" | grep -Po 'Последний раз обновлено: \*\*\K[0-9-]+')
+if (( $(date +%s -d "$year-$month-$day") <= $(date +%s -d "$wiki_date") )); then
+    echo 'Timetables are up to date'
+    exit
+fi
+
+grep -Po "$regex_teaduskond|$regex_link|$regex_name" out.html | process # main loop
+
+rm -f combined.css out.css out.html
+
+echo 'Done!'

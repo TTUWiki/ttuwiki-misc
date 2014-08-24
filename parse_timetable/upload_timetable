@@ -1,0 +1,20 @@
+#!/bin/bash
+set -e # exit immediately on error
+
+for curFile in pics/*; do
+    echo "Uploading $curFile..."
+    curl -F 'key=60e6468576c1323fd731' -F "fileToUpload0=@$curFile" 'http://files.ttuwiki.org/cgi-bin/upload.pl'
+done
+
+for curFile in pages/*; do
+    echo "Editing $curFile..."
+    cp -f -- "$curFile" 'newPage'
+    if wget -O curPage -- "http://ttuwiki.org/cgi-bin/wiki.pl/${curFile##*/}?raw=1"; then
+	echo >> newPage # just in case
+	grep --after-context=999999 -e '----' curPage >> newPage || :
+    fi
+    ./wikiput -u 'Bot' -s 'Автоматическое обновление' -- "http://ttuwiki.org/${curFile##*/}" < newPage
+    rm -f curPage newPage
+done
+
+echo 'Done!'
