@@ -63,6 +63,7 @@ link_css1='http://ois.ttu.ee/pls/portal/PORTAL.wwv_setting.render_css?p_lang_typ
 link_css2='http://ois.ttu.ee/pls/portal/ois2.sys_styles.style_sisu'
 (curl "$link_css1"; curl "$link_css2" ) > combined.css
 
+# XXX perhaps xpath is a better tool for that?
 regex_teaduskond='<td class="s" rowspan="2">(<span[^>]+>)?\K[^<]+'
 regex_link='^\s+onclick="window\.location='"'\K[^']+"
 regex_name='textDecoration='"''"';">\K[^<]+'
