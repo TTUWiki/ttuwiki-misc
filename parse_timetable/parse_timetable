@@ -6,8 +6,19 @@ shopt -s nullglob
 set -e # exit immediately on error
 
 process() {
-    echo '**Расписания в картинках здесь: [[Расписания в PNG]]**' > "$FILE_TIMETABLES"
-    echo '**Обычные расписания здесь: [[Расписания]]**' > "$FILE_TIMETABLES_PNG"
+    wikiLink=${FILE_TIMETABLES##*/}
+    wikiLinkPng=${FILE_TIMETABLES_PNG##*/}
+
+    echo "**Расписания в картинках здесь: [[$wikiLinkPng]]**" > "$FILE_TIMETABLES"
+    echo "**Обычные расписания здесь: [[$wikiLink]]**" > "$FILE_TIMETABLES_PNG"
+
+    if [[ $1 == 'kaug' ]]; then # kaug workarounds
+	echo "**Обычные расписания (стационарное) здесь: [[${wikiLinkPng% (*}]]**" >> "$FILE_TIMETABLES_PNG"
+	echo "**Обычные расписания (стационарное) здесь: [[${wikiLink% (*}]]**" >> "$FILE_TIMETABLES"
+    else
+	echo "**Расписания для заочников здесь: [[$wikiLinkPng (заочное)]]**" >> "$FILE_TIMETABLES_PNG"
+	echo "**Расписания для заочников здесь: [[$wikiLink (заочное)]]**" >> "$FILE_TIMETABLES"
+    fi
 
     echo -ne "\nПоследний раз обновлено: **$(date '+%Y-%m-%d')**##" >> "$FILE_TIMETABLES"
     echo -ne "\nПоследний раз обновлено: **$(date '+%Y-%m-%d')**##" >> "$FILE_TIMETABLES_PNG"
@@ -28,7 +39,7 @@ process() {
         else # timetable kood
             kood=$line
             echo "$kood..."
-            [[ $kood =~ ^[A-Z][A-Z][A-Z][A-Z][0-9][0-9]$ ]] || exit 1
+            [[ $kood =~ ^[A-Z]{4,5}[0-9]{2,3}$ ]] || exit 1
             echo -n "[Ti:$timetableId $kood] " >> "$FILE_TIMETABLES"
             echo -n "[Fi:$kood$curDate.png $kood] " >> "$FILE_TIMETABLES_PNG"
 
@@ -69,7 +80,14 @@ regex_link='^\s+onclick="window\.location='"'\K[^']+"
 regex_name='textDecoration='"''"';">\K[^<]+'
 link_timetables='http://ois.ttu.ee/portal/page?_pageid=35,435155&_dad=portal&_schema=PORTAL&from_menu=1'
 
+if [[ $1 == 'kaug' ]]; then # kaug workarounds
+    link_timetables+='&b=2'
+    FILE_TIMETABLES+=' (заочное)'
+    FILE_TIMETABLES_PNG+=' (заочное)'
+fi
+
 curl "$link_timetables" > out.html
+
 IFS='.' read -r day month year <<< "$(grep -Po 'publitseeritud:&nbsp;\K[0-9.]+' out.html)"
 wiki_date=$(curl "http://ttuwiki.org/cgi-bin/wiki.pl/Расписания?raw=1" | grep -Po 'Последний раз обновлено: \*\*\K[0-9-]+')
 if (( $(date +%s -d "$year-$month-$day") <= $(date +%s -d "$wiki_date") )); then
@@ -77,7 +95,7 @@ if (( $(date +%s -d "$year-$month-$day") <= $(date +%s -d "$wiki_date") )); then
     exit
 fi
 
-grep -Po "$regex_teaduskond|$regex_link|$regex_name" out.html | process # main loop
+grep -Po "$regex_teaduskond|$regex_link|$regex_name" out.html | process "$1" # main loop
 
 rm -f combined.css out.css out.html
 
